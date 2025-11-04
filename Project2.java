@@ -1,229 +1,194 @@
-package Project2_6713118;
+package Project2;
 
 /**
  *
  * @author Thanakrit Jomhong 6713118
  */
+
 import java.util.*;
 import java.io.*;
 import java.util.concurrent.*;
 
 class SupplierThread extends Thread
 {
-	public SupplierThread(String n)
+        private int min;
+        private int max;
+        private ArrayList<Warehouse> wareHouse;
+        private CyclicBarrier cbSupplier;
+        private boolean canRun;
+        private boolean isEnd;
+        
+	public SupplierThread(String n, int mi, int ma, CyclicBarrier b)
 	{
-		super(n);
+            super(n);
+            min = mi; 
+            max = ma;
+            cbSupplier = b;
 	}
+        
+        public void setArrayWarehouse(ArrayList<Warehouse> whse) { wareHouse = whse; }
+        public void setPermits(boolean r, boolean e)             { canRun = r; isEnd = e;}
+                
+        public void run() {
+            while(!isEnd) {
+                Random rand = new Random();
+                int numWhse = wareHouse.size();
+                int chooseWhse = rand.nextInt(numWhse);
+                wareHouse.get(chooseWhse).put(min, max);
+                try { 
+                    cbSupplier.await(); 
+                    Thread.sleep(10);
+                } catch(Exception e) { }  
+                
+                while(canRun) { try { Thread.sleep(100); } catch(Exception e) {} }
+            } 
+        }
+        
 }
+///
 class FactoryThread extends Thread
 {
-	public FactoryThread(String n)
+    
+    private int max;
+    private ArrayList<Warehouse> wareHouse;
+    private ArrayList<Freight> freights;
+    //private CyclicBarrier cbFactory;
+    private boolean isEnd;
+    private Random rand = new Random();
+    
+    private CyclicBarrier factoryStartBarrier;
+    private CyclicBarrier afterCreateBarrier;
+    private CyclicBarrier afterShipBarrier;
+    private CyclicBarrier afterUnshippedBarrier;
+    
+    private int totalCreated = 0;
+    private int totalShipped = 0;
+    private int unshippedPrev = 0;
+    
+        public int getTottalCreated() { return totalCreated; }
+        public int getTotalShipped() { return totalShipped; }
+    
+        public void setEnd(boolean e) { isEnd = e; }
+        //public void setArrayWarehouse(ArrayList<Warehouse> whse) { wareHouse = whse; }
+        //public void setArrayFreight(ArrayList<Freight> fr) { freights = fr; }
+	public FactoryThread(String n, int maxP, ArrayList<Warehouse> wh, ArrayList<Freight> fr,
+                CyclicBarrier start, CyclicBarrier afterCreate, CyclicBarrier afterShip, CyclicBarrier afterUnshipped)
 	{
 		super(n);
+                max = maxP;
+                wareHouse = wh;
+                freights = fr;
+                this.factoryStartBarrier = start;
+                this.afterCreateBarrier = afterCreate;
+                this.afterShipBarrier = afterShip;
+                this.afterUnshippedBarrier = afterUnshipped;
+                //cbFactory = b;
 	}
+        
+        public void run()
+        {
+            while(!isEnd)
+            {
+                try
+                {
+                    //phase1
+                    factoryStartBarrier.await();
+                    
+                //get materials from random warehouse
+                
+                int numWhse = wareHouse.size();
+                int chooseWhse = rand.nextInt(numWhse);
+                int got = wareHouse.get(chooseWhse).get(max); //// get random value   
+                int created = got;
+                totalCreated += created;
+                
+                //print total to ship
+                int totalToShip = created + unshippedPrev;
+                System.out.printf("%s  >>  total products to ship = %4d\n", getName(), totalToShip);
+                
+                afterCreateBarrier.await();
+                
+                int fIdx = rand.nextInt(freights.size());
+                Freight f = freights.get(fIdx);
+                int shipped = f.ship(totalToShip);
+                totalShipped += shipped;
+                int unshippedNow = totalToShip - shipped;
+
+                // print ship line and freight remaining capacity
+                System.out.printf("%s  >>  ship %4d products      %s remaining capacity = %4d\n",
+                        getName(), shipped, f.getName(), f.getRemaining());
+                
+                afterShipBarrier.await();
+                
+                unshippedPrev = unshippedNow;
+                System.out.printf("%s  >>  unshipped products = %4d\n", getName(), unshippedPrev);
+                
+                afterUnshippedBarrier.await();
+                
+                }
+                catch(Exception e) { }  
+            }
+        }
 }
 class Warehouse
 {
 	private	String	name;
-	public Warehouse(String n)
-	{
-		name = n;
-	}
-	public String getName()
-	{
-		return (name);
-	}
+        private int     balance;
+         
+	public Warehouse(String n)      { 
+            name = n; 
+            balance = 0;
+        }
+	public String getName()         { return name; }
+        public int getBalance()         { return balance; }
+        
+        synchronized public void put(int min, int max) {
+            Thread current = Thread.currentThread();
+            Random rand = new Random();
+            int randNum = rand.nextInt(max - min + 1) + min;
+            
+            balance += randNum;
+            System.out.print(" ".repeat(2));
+            System.out.printf("%s  >>  put%4d materials      %s balance =%7d\n", current.getName(), randNum, name, balance);
+        }
+        
+        synchronized public int get(int want) {
+            Thread current = Thread.currentThread();
+            int got = Math.min(want, balance);
+            balance -= got;
+            System.out.print(" ".repeat(3));
+            System.out.printf("%s  >>  get%4d materials      %s balance =%7d\n", current.getName(), got, name, balance);
+            return got;
+}
 }
 
 class Freight
 {
 	private String name;
-	public Freight(String n)
-	{
-		name = n;
-	}
-	public String getName()
-	{
-		return (name);
-	}
-}
-class Freight_num_max
-{
-	private	int	capacity;
-	private	int	max;
-	public	ArrayList<Freight> fr;
-
-	public	Freight_num_max(int c, int m)
-	{
-		capacity = c;
-		max = m;
-	}
-	public	int getmax()
-	{
-		return (max);
-	}
-	public void build()
-	{
-		String	name;
-		int	i;
-	
-		fr = new ArrayList<>();
-		i = 0;
-		while (i < capacity)
-		{
-			name = String.format("Freight_%d", i);
-			fr.add(new Freight(name));
-			i++;
-		}
-	}
-	public ArrayList<String> show()
-	{
-		ArrayList<String> name;
-		int	i;
-		
-		name = new ArrayList<>();
-		i = 0;
-		while (i < fr.size())
-		{
-			name.add(fr.get(i).getName());	
-			i++;
-		}
-		return (name);
-	}
-}
-class Factory_num_max
-{
-	private	int	capacity;
-	private	int	max;
-	public	ArrayList<FactoryThread> ft;
-
-	public	Factory_num_max(int c, int m)
-	{
-		capacity = c;
-		max = m;
-	}
-	public int getmax()
-	{
-		return (max);
-	}
-	public void buildthread()
-	{
-		String	name;
-		int	i;
-
-		i = 0;
-		ft = new ArrayList<>();
-		while (i < capacity)
-		{
-			name = String.format("FactoryThread_%d", i);
-			ft.add(new FactoryThread(name));
-			i++;
-		}
-	}
-	public ArrayList<String> showthread()
-	{
-		ArrayList<String> Threadname;
-		int	i;	
-		
-		Threadname = new ArrayList<>();
-		i = 0;
-		while (i < ft.size())
-		{
-			Threadname.add(ft.get(i).getName());
-			i++;	
-		}
-		return (Threadname);
-	}
+        private int max;
+        private int remaining;
+	public Freight(String n , int m)        { name = n; max = m; remaining = max;}
+	public String getName()         { return name; }
+        
+        //reset everyday
+        public synchronized void reset(int m)
+        {
+            this.max = m;
+            this.remaining = m; 
+                 
+        }
+        
+        public synchronized int ship(int amount)
+        {
+            int shipped = Math.min(amount, remaining);
+            remaining -= shipped;
+            return shipped;
+        }
+        public synchronized int getRemaining() { return remaining; }
+        public synchronized int getMaxCapacity() { return max; }
+        
 }
 
-class Supplier_num_min_max
-{
-	private	int	capacity;
-	private	int	min;
-	private	int	max;
-	public	ArrayList<SupplierThread> st;
-	
-	public	Supplier_num_min_max(int c, int mi, int ma)
-	{
-		capacity = c;
-		min = mi;
-		max = ma;
-	}
-	public int getmin()
-	{
-		return (min);
-	}
-	public int getmax()
-	{
-		return (max);
-	}
-	public void buildthread()
-	{
-		String	name;
-		int	i;
-
-		i = 0;
-		st = new ArrayList<>();
-		while (i < capacity)
-		{
-			name = String.format("SupplierThread_%d", i);
-			st.add(new SupplierThread(name));
-			i++;
-		}
-	}
-	public ArrayList<String> showthread()
-	{
-		ArrayList<String> Threadname;
-		int	i;	
-		
-		Threadname = new ArrayList<>();
-		i = 0;
-		while (i < st.size())
-		{
-			Threadname.add(st.get(i).getName());
-			i++;	
-		}
-		return (Threadname);
-	}
-}
-class Warehouse_num
-{
-	private int num;
-	public ArrayList<Warehouse> wh;
-
-	public Warehouse_num(int n)
-	{
-		num = n;
-	}
-	public void build()
-	{
-		String	name;
-		int	i;
-	
-		wh = new ArrayList<>();
-		i = 0;
-		while (i < num)
-		{
-			name = String.format("Warehouse_%d", i);
-			wh.add(new Warehouse(name));
-			i++;
-		}
-	}
-	public ArrayList<String> show()
-	{
-		ArrayList<String> name;
-		int	i;
-		
-		name = new ArrayList<>();
-		i = 0;
-		while (i < wh.size())
-		{
-			name.add(wh.get(i).getName());	
-			i++;
-		}
-		return (name);
-	}
-}
 public class Project2 
 {
 	private	int	days;
@@ -234,12 +199,147 @@ public class Project2
 
 	public static void main(String[] args)
 	{
-		Project2	obj;
+            Project2	obj;
 
-		obj = new Project2();
-		obj.input("config_1.txt"); // correct name is config_1.txt
-		obj.print();
+            obj = new Project2();
+            obj.input("config_1.txt"); // correct name is config_1.txt
+            
+            ArrayList<Warehouse> wh = obj.warehouse_num.getArrayWarehouse();
+            ArrayList<Freight> fr = obj.freight_num_max.getArrayFreight();
+            obj.factory_num_max.buildthread(wh, fr);
+            obj.print();
+            obj.runDaySimulation();
 	}    
+        
+        public void runDaySimulation() {
+            CyclicBarrier cbSupplier = supplier_num_min_max.getBarrier();
+            supplier_num_min_max.setArrayWarehouse(warehouse_num.getArrayWarehouse());
+            ArrayList<Warehouse> wareHouses = warehouse_num.getArrayWarehouse();
+            ArrayList<SupplierThread> suppliers = supplier_num_min_max.getArraySupplier();
+            
+            ArrayList<Freight> freights = freight_num_max.getArrayFreight();
+            factory_num_max.buildthread(wareHouses, freights);
+            ArrayList<FactoryThread> factories = factory_num_max.getArrayFactory();
+
+            
+            
+            CyclicBarrier factoryStart = factory_num_max.getFactoryStartBarrier();
+            CyclicBarrier afterCreate = factory_num_max.getAfterCreateBarrier();
+            CyclicBarrier afterShip = factory_num_max.getAfterShipBarrier();
+            CyclicBarrier afterUnshipped = factory_num_max.getAfterUnshippedBarrier();
+            
+            // start supplier threads
+            if (suppliers != null) {
+            for (SupplierThread st : suppliers) {
+                st.start();
+                st.setPermits(true, false);
+                }
+            }   
+
+            // start factory threads
+            if (factories != null) {
+            for (FactoryThread ft : factories) {
+                ft.start();
+                }
+            }
+                        
+            // Loop days
+            for(int i = 0; i < days; i++) {
+                System.out.print(" ".repeat(14));
+                System.out.printf("%s  >>  ", Thread.currentThread().getName());
+		System.out.print("=".repeat(52));
+                System.out.printf("\n");
+                System.out.print(" ".repeat(14));
+		System.out.printf("%s  >>  Day %d\n", Thread.currentThread().getName(), i+1);
+                
+                for(Warehouse whse : wareHouses) {
+                    System.out.print(" ".repeat(14));
+                    System.out.printf("%s  >>  %s balance  =%7d\n", Thread.currentThread().getName(), whse.getName(), whse.getBalance());
+                }
+                
+                // reset freight capacities at day start
+                for (Freight f : freights) f.reset(freight_num_max.getmax());
+
+                // --- supplier phase: main + suppliers sync on cbSupplier ---
+                try { cbSupplier.await(); } catch (Exception e) { }
+
+                // --- factory phased sequence ---
+                // 1) let factories start create (they will get materials and print totals)
+                try { factoryStart.await(); } catch (Exception e) { }
+
+                // 2) wait until all factories finished create (they each call afterCreate.await())
+                try { afterCreate.await(); } catch (Exception e) { }
+
+                // 3) wait until factories finished ship
+                try { afterShip.await(); } catch (Exception e) { }
+
+                // 4) wait until factories finished unshipped printing
+                try { afterUnshipped.await(); } catch (Exception e) { }
+
+                // small pause to keep output readable
+                try { Thread.sleep(50); } catch (Exception e) {}
+                // manage supplier permits for next day like original logic
+                for (SupplierThread st : suppliers) {
+                st.setPermits(true, false);
+                    }
+                }
+
+            
+            // stop supplier threads
+            if (suppliers != null) {
+                for (SupplierThread st : suppliers) {
+                    st.setPermits(false, true);
+                    }
+                }
+            // stop factory threads
+            if (factories != null) {
+                for (FactoryThread ft : factories) {
+                    ft.setEnd(true);
+                    }
+                }
+
+    // join threads (optional)
+    if (suppliers != null) {
+        for (SupplierThread st : suppliers) {
+            try { st.join(100); } catch (InterruptedException ex) {}
+        }
+    }
+    if (factories != null) {
+        for (FactoryThread ft : factories) {
+            try { ft.join(100); } catch (InterruptedException ex) {}
+        }
+    }
+                
+//                if(i != 0) {
+//                    for(SupplierThread st : suppliers) {
+//                        st.setPermits(true, false);
+//                    }
+//                }
+                                
+                // Start Thread
+                /*
+                if(i == 0) {
+                    for(SupplierThread st : suppliers) {
+                        st.start();
+                        st.setPermits(true, false);
+                    }
+                } else {
+                    for(SupplierThread st : suppliers) {
+                        st.setPermits(false, false);
+                    }
+                }
+               
+                try { cbSupplier.await(); } catch(Exception e) { }
+                for(SupplierThread st : suppliers) {
+                        st.setPermits(true, false);
+                }
+            }
+            
+            for(SupplierThread st : suppliers) {
+                st.setPermits(false, true);
+            }*/
+        }
+        
 	public void print()
 	{
 		System.out.print(" ".repeat(14));
@@ -294,7 +394,7 @@ public class Project2
 				while (scan.hasNext())
 				{
 					line = scan.nextLine();
-					this.input2(line);
+					this.buildAndSetObj(line);
 				}
 			}
 			catch (FileNotFoundException e)
@@ -306,7 +406,7 @@ public class Project2
 			}	
 		}
 	}
-	public	void input2(String line)
+	public	void buildAndSetObj(String line)
 	{
 		String[] cols;
 
@@ -334,7 +434,7 @@ public class Project2
 		else if (cols[0].equalsIgnoreCase("factory_num_max"))
 		{
 			factory_num_max = new Factory_num_max(Integer.parseInt(cols[1].trim()), Integer.parseInt(cols[2].trim()));
-			factory_num_max.buildthread();
+			//factory_num_max.buildthread();
 		}
 	}
 }
