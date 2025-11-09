@@ -58,29 +58,34 @@ class Freight_num_max
 
 class Factory_num_max
 {
-	private	int	capacity;
+        private int     days;
+	private	int	num;
 	private	int	max;
 	private	ArrayList<FactoryThread> ft;
         //private CyclicBarrier barrier;
         
-        private CyclicBarrier factoryStartBarrier;
-        private CyclicBarrier afterCreateBarrier;
+        private CyclicBarrier startFactoryBarrier;
+        private CyclicBarrier afterGetMatBarrier;
+        private CyclicBarrier afterTotalBarrier;
         private CyclicBarrier afterShipBarrier;
         private CyclicBarrier afterUnshippedBarrier;
         
-        public CyclicBarrier getFactoryStartBarrier() { return factoryStartBarrier; }
-        public CyclicBarrier getAfterCreateBarrier() { return afterCreateBarrier; }
+        public CyclicBarrier getStartFactoryBarrier() { return startFactoryBarrier; }
+        public CyclicBarrier getAfterGetMatBarrier() { return afterGetMatBarrier; }
+        public CyclicBarrier getAfterTotalBarrier() { return afterTotalBarrier; }
         public CyclicBarrier getAfterShipBarrier() { return afterShipBarrier; }
         public CyclicBarrier getAfterUnshippedBarrier() { return afterUnshippedBarrier; }
 
-	public	Factory_num_max(int c, int m)
+	public	Factory_num_max(int d, int c, int m)
 	{
-		capacity = c;
+                days = d;
+		num = c;
 		max = m;
-                factoryStartBarrier = new CyclicBarrier(capacity + 1);
-                afterCreateBarrier = new CyclicBarrier(capacity + 1);
-                afterShipBarrier = new CyclicBarrier(capacity + 1);
-                afterUnshippedBarrier = new CyclicBarrier(capacity + 1);
+                startFactoryBarrier = new CyclicBarrier(num + 1);
+                afterGetMatBarrier = new CyclicBarrier(num + 1);
+                afterTotalBarrier = new CyclicBarrier(num + 1);
+                afterShipBarrier = new CyclicBarrier(num + 1);
+                afterUnshippedBarrier = new CyclicBarrier(num + 1);
                 
 	}
 	public int getmax()     { return (max); }
@@ -94,11 +99,11 @@ class Factory_num_max
 
 		i = 0;
 		ft = new ArrayList<>();
-		while (i < capacity)
+		while (i < num)
 		{
 			name = String.format("FactoryThread_%d", i);
-			ft.add(new FactoryThread(name, max, wh, fr, factoryStartBarrier,
-                                afterCreateBarrier, afterShipBarrier, afterUnshippedBarrier));
+			ft.add(new FactoryThread(days, name, max, wh, fr, startFactoryBarrier,
+                                afterGetMatBarrier, afterTotalBarrier, afterShipBarrier, afterUnshippedBarrier));
 			i++;
 		}
 	}
@@ -120,23 +125,28 @@ class Factory_num_max
 
 class Supplier_num_min_max
 {
+        private int     days;
 	private	int	num;
 	private	int	min;
 	private	int	max;
 	private	ArrayList<SupplierThread> st;
-        private CyclicBarrier barrier;
+        private CyclicBarrier reportBarrier;
+        private CyclicBarrier afterSupplierBarrier;
 	
-	public	Supplier_num_min_max(int n, int mi, int ma)
+	public	Supplier_num_min_max(int d, int n, int mi, int ma)
 	{
+                days = d;
 		num = n;
 		min = mi;
 		max = ma;
-                barrier = new CyclicBarrier(num + 1);
+                reportBarrier = new CyclicBarrier(num + 1);
+                afterSupplierBarrier = new CyclicBarrier(num + 1);
 	}
 	public int getmin()     { return min; }
 	public int getmax()     { return max; }
         public int getNum()     { return num; }
-        public CyclicBarrier getBarrier()   { return barrier; }
+        public CyclicBarrier getReportBarrier()   { return reportBarrier; }
+        public CyclicBarrier getAfterSupplierBarrier()   { return afterSupplierBarrier; }
         public	ArrayList<SupplierThread> getArraySupplier()    { return st; }
         
         public void setArrayWarehouse(ArrayList<Warehouse> whse)     { 
@@ -158,7 +168,7 @@ class Supplier_num_min_max
 		while (i < num)
 		{
 			name = String.format("SupplierThread_%d", i);
-			st.add(new SupplierThread(name, min, max, barrier));
+			st.add(new SupplierThread(days, name, min, max, reportBarrier, afterSupplierBarrier));
 			i++;
 		}
 	}
