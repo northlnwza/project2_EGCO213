@@ -1,8 +1,11 @@
-package Project2;
+package Project2_6713118;
 
 /**
  *
  * @author Thanakrit Jomhong 6713118
+ * 6713245 Phurinut Wongwatcharapaiboon
+ * 6713232 Jitchaya Hirunsri
+ * 6713233 Tanop Udomkanaruck
  */
 
 import java.util.*;
@@ -34,7 +37,7 @@ class SupplierThread extends Thread
         public void setPermits(boolean r, boolean e)             { canRun = r; isEnd = e;}
                 
         public void run() {
-            while(!isEnd) {
+//            while(!isEnd) {
                 for(int i = 0; i < days; i++) {
                     this.setPermits(true, false);
                     Random rand = new Random();
@@ -49,7 +52,7 @@ class SupplierThread extends Thread
 
                     while(canRun) { try { Thread.sleep(100); } catch(Exception e) {} }
                 }
-            } 
+//            } 
         }
         
 }
@@ -100,8 +103,8 @@ class FactoryThread extends Thread implements Comparable<FactoryThread>
         
         public void run()
         {
-            while(!isEnd)
-            {
+//            while(!isEnd)
+//            {
                 try
                 {
                     for(int i = 0; i < days; i++) {
@@ -125,14 +128,22 @@ class FactoryThread extends Thread implements Comparable<FactoryThread>
 
                         int fIdx = rand.nextInt(freights.size());
                         Freight f = freights.get(fIdx);
-                        int shipped = f.ship(totalToShip);
-                        totalShipped += shipped;
-                        int unshippedNow = totalToShip - shipped;
+                        int shipped;
+                        int unshippedNow;
+                        int newRemainingCapacity;
+                        
+                        synchronized(f)
+                        {
+                            shipped = f.ship(totalToShip);
+                            newRemainingCapacity = f.getRemaining();
+                        
 
+                        totalShipped += shipped;
+                        unshippedNow = totalToShip - shipped;
                         // print ship line and freight remaining capacity
                         System.out.printf("   %s  >>  ship %3d products      %s remaining capacity = %4d\n",
-                                getName(), shipped, f.getName(), f.getRemaining());
-
+                                getName(), shipped, f.getName(), newRemainingCapacity);
+                        }
                         afterShipBarrier.await();
 
                         unshippedPrev = unshippedNow;
@@ -142,7 +153,7 @@ class FactoryThread extends Thread implements Comparable<FactoryThread>
                     }
                 }
                 catch(Exception e) { }  
-            }
+//            }
         }
         
         @Override
@@ -239,7 +250,7 @@ public class Project2
             Project2	obj;
 
             obj = new Project2();
-            obj.input("config_1.txt"); // correct name is config_1.txt
+            obj.input("configs_1.txt"); // correct name is config_1.txt
             
             ArrayList<Warehouse> wh = obj.warehouse_num.getArrayWarehouse();
             ArrayList<Freight> fr = obj.freight_num_max.getArrayFreight();
@@ -343,15 +354,15 @@ public class Project2
             // stop supplier threads
             if (suppliers != null) {
                 for (SupplierThread st : suppliers) {
-                    st.setPermits(false, true);
-                    try { st.join(100); } catch (InterruptedException ex) {}
+                   //st.setPermits(false, true);
+                    try { st.join(); } catch (InterruptedException ex) {}
                 }
             }
             // stop factory threads
             if (factories != null) {
                 for (FactoryThread ft : factories) {
-                    ft.setEnd(true);
-                    try { ft.join(100); } catch (InterruptedException ex) {}
+                  // ft.setEnd(true);
+                    try { ft.join(); } catch (InterruptedException ex) {}
                 }
             }
             // --- Summary ---
@@ -408,7 +419,6 @@ public class Project2
 
 		System.out.print(" ".repeat(14));
 		System.out.printf("%s  >>  Daily production   : max = %d\n", Thread.currentThread().getName(), factory_num_max.getmax());
-
 	}
 	public void input(String filename)
 	{
@@ -417,9 +427,8 @@ public class Project2
 		String	line;
 		String	path;
 		boolean	opensuccess;
-
 		opensuccess = false;
-		path = "src/main/Java/Project2/";
+		path = "src/main/Java/Project2_6713118/";
 		while (!opensuccess)
 		{
 			try
