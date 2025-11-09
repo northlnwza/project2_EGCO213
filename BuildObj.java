@@ -89,6 +89,7 @@ class Factory_num_max
                 
 	}
 	public int getmax()     { return (max); }
+        public int getnum()     { return (num); }
         public ArrayList<FactoryThread> getArrayFactory() { return ft; }
         //public CyclicBarrier getBarrier() { return barrier; }
         
@@ -102,7 +103,7 @@ class Factory_num_max
 		while (i < num)
 		{
 			name = String.format("FactoryThread_%d", i);
-			ft.add(new FactoryThread(days, name, max, wh, fr, startFactoryBarrier,
+			ft.add(new FactoryThread(days, num, name, max, wh, fr, startFactoryBarrier,
                                 afterGetMatBarrier, afterTotalBarrier, afterShipBarrier, afterUnshippedBarrier));
 			i++;
 		}

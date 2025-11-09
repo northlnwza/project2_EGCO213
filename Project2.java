@@ -23,11 +23,11 @@ class SupplierThread extends Thread
 	public SupplierThread(int d, String n, int mi, int ma, CyclicBarrier report, CyclicBarrier after)
 	{
             super(n);
-            days = d;
-            min = mi; 
-            max = ma;
-            reportBarrier = report;
-            afterSupplierBarrier = after;
+            this.days = d;
+            this.min = mi; 
+            this.max = ma;
+            this.reportBarrier = report;
+            this.afterSupplierBarrier = after;
 	}
         
         public void setArrayWarehouse(ArrayList<Warehouse> whse) { wareHouse = whse; }
@@ -54,9 +54,10 @@ class SupplierThread extends Thread
         
 }
 ///
-class FactoryThread extends Thread
+class FactoryThread extends Thread implements Comparable<FactoryThread>
 {
     private int days;
+    private int num;
     private int max;
     private ArrayList<Warehouse> wareHouse;
     private ArrayList<Freight> freights;
@@ -74,20 +75,21 @@ class FactoryThread extends Thread
     private int totalShipped = 0;
     private int unshippedPrev = 0;
     
-        public int getTottalCreated() { return totalCreated; }
+        public int getTotalCreated() { return totalCreated; }
         public int getTotalShipped() { return totalShipped; }
     
         public void setEnd(boolean e) { isEnd = e; }
         //public void setArrayWarehouse(ArrayList<Warehouse> whse) { wareHouse = whse; }
         //public void setArrayFreight(ArrayList<Freight> fr) { freights = fr; }
-	public FactoryThread(int d, String n, int maxP, ArrayList<Warehouse> wh, ArrayList<Freight> fr,
+	public FactoryThread(int d, int num, String n, int maxP, ArrayList<Warehouse> wh, ArrayList<Freight> fr,
                 CyclicBarrier start, CyclicBarrier afterGet, CyclicBarrier afterTotal, CyclicBarrier afterShip, CyclicBarrier afterUnshipped)
 	{
                 super(n);
-                days = d;
-                max = maxP;
-                wareHouse = wh;
-                freights = fr;
+                this.days = d;
+                this.num = num;
+                this.max = maxP;
+                this.wareHouse = wh;
+                this.freights = fr;
                 this.startFactoryBarrier = start;
                 this.afterGetBarrier = afterGet;
                 this.afterTotalBarrier = afterTotal;
@@ -102,46 +104,65 @@ class FactoryThread extends Thread
             {
                 try
                 {
-                   
-                //phase1
-                startFactoryBarrier.await();
-                    
-                //get materials from random warehouse
-                
-                int numWhse = wareHouse.size();
-                int chooseWhse = rand.nextInt(numWhse);
-                int got = wareHouse.get(chooseWhse).getMatetial(max); //// get random value
-                
-                afterGetBarrier.await();
-                
-                int created = got;
-                totalCreated += created;
-                //print total to ship
-                int totalToShip = created + unshippedPrev;
-                System.out.printf("   %s  >>  total products to ship = %4d\n", getName(), totalToShip);
-                
-                afterTotalBarrier.await();
-                
-                int fIdx = rand.nextInt(freights.size());
-                Freight f = freights.get(fIdx);
-                int shipped = f.ship(totalToShip);
-                totalShipped += shipped;
-                int unshippedNow = totalToShip - shipped;
+                    for(int i = 0; i < days; i++) {
+                        //phase1
+                        startFactoryBarrier.await();
 
-                // print ship line and freight remaining capacity
-                System.out.printf("   %s  >>  ship %4d products      %s remaining capacity = %4d\n",
-                        getName(), shipped, f.getName(), f.getRemaining());
-                
-                afterShipBarrier.await();
-                
-                unshippedPrev = unshippedNow;
-                System.out.printf("   %s  >>  unshipped products = %4d\n", getName(), unshippedPrev);
-                
-                afterUnshippedBarrier.await();
-                
+                        //get materials from random warehouse
+                        int numWhse = wareHouse.size();
+                        int chooseWhse = rand.nextInt(numWhse);
+                        int got = wareHouse.get(chooseWhse).getMatetial(max,num); //// get random value
+
+                        afterGetBarrier.await();
+
+                        int created = got;
+                        totalCreated += created;
+                        //print total to ship
+                        int totalToShip = created + unshippedPrev;
+                        System.out.printf("   %s  >>  total products to ship = %5d\n", getName(), totalToShip);
+
+                        afterTotalBarrier.await();
+
+                        int fIdx = rand.nextInt(freights.size());
+                        Freight f = freights.get(fIdx);
+                        int shipped = f.ship(totalToShip);
+                        totalShipped += shipped;
+                        int unshippedNow = totalToShip - shipped;
+
+                        // print ship line and freight remaining capacity
+                        System.out.printf("   %s  >>  ship %3d products      %s remaining capacity = %4d\n",
+                                getName(), shipped, f.getName(), f.getRemaining());
+
+                        afterShipBarrier.await();
+
+                        unshippedPrev = unshippedNow;
+                        System.out.printf("   %s  >>  unshipped products = %5d\n", getName(), unshippedPrev);
+
+                        afterUnshippedBarrier.await();
+                    }
                 }
                 catch(Exception e) { }  
             }
+        }
+        
+        @Override
+        public int compareTo(FactoryThread other)
+        {
+            if (this.totalCreated < other.totalCreated)       return 1;	
+            else if (this.totalCreated > other.totalCreated)  return -1;	
+            else {
+                int x = (this.getName()).compareToIgnoreCase(other.getName());
+                if (x>0) return 1;
+                else if (x<0) return -1;
+                else return 0;
+            }
+        }
+
+        @Override
+        public boolean equals(Object param)
+        {
+            FactoryThread other = (FactoryThread) param;
+            return (this.getName()) == (other.getName());
         }
 }
 class Warehouse
@@ -160,21 +181,22 @@ class Warehouse
             Thread current = Thread.currentThread();
             Random rand = new Random();
             int randNum = rand.nextInt(max - min) + min;
-            
             balance += randNum;
-//            System.out.print(" ".repeat(2));
-            System.out.printf("  %s  >>  put%4d materials      %s balance =%7d\n", current.getName(), randNum, name, balance);
+            System.out.printf("  %s  >>  put%4d materials      %s balance =%6d\n", current.getName(), randNum, name, balance);
         }
         
-        synchronized public int getMatetial(int want) {
+        private static int totalCount = 0;
+        synchronized public int getCount() {totalCount++; return totalCount;}
+        
+        synchronized public int getMatetial(int want, int num) {
             Thread current = Thread.currentThread();
             int got = Math.min(want, balance);
-            
             balance -= got;
-//            System.out.print(" ".repeat(3));
-            System.out.printf("   %s  >>  get%4d materials      %s balance =%7d\n", current.getName(), got, name, balance);
+            System.out.printf("   %s  >>  get%4d materials      %s balance =%6d\n", current.getName(), got, name, balance);
+            int count = getCount();
+            if (count % num == 0) System.out.printf("   %s  >>\n", current.getName());
             return got;
-}
+        }
 }
 
 class Freight
@@ -274,15 +296,18 @@ public class Project2
 
                 for(Warehouse whse : wareHouses) {
                     System.out.print(" ".repeat(14));
-                    System.out.printf("%s  >>  %s balance  =%7d\n", Thread.currentThread().getName(), whse.getName(), whse.getBalance());
+                    System.out.printf("%s  >>  %s balance  =%6d\n", Thread.currentThread().getName(), whse.getName(), whse.getBalance());
                 }
-
+ 
                 // reset freight capacities at day start
                 for (Freight f : freights) {
                     f.reset(freight_num_max.getmax());
                     System.out.print(" ".repeat(14));
-                    System.out.printf("%s  >>  %s capacity  =%7d\n", Thread.currentThread().getName(), f.getName(), f.getRemaining());
+                    System.out.printf("%s  >>  %s   capacity =%6d\n", Thread.currentThread().getName(), f.getName(), f.getRemaining());
                 }
+                
+                System.out.print(" ".repeat(14));
+		System.out.printf("%s  >>  \n", Thread.currentThread().getName());
                 
                 // --- report phase done: main + suppliers sync on reportBarrier ---
                 try { startSupplier.await(); } catch (Exception e) { }
@@ -314,57 +339,42 @@ public class Project2
                     st.setPermits(false, false);
                 }
             }
-
             
             // stop supplier threads
             if (suppliers != null) {
                 for (SupplierThread st : suppliers) {
                     st.setPermits(false, true);
                     try { st.join(100); } catch (InterruptedException ex) {}
-                    }
                 }
+            }
             // stop factory threads
             if (factories != null) {
                 for (FactoryThread ft : factories) {
                     ft.setEnd(true);
                     try { ft.join(100); } catch (InterruptedException ex) {}
-                    }
-                }
-            
-//            for (Thread t : threads) {
-//                t.join();
-//            }
-
-                
-//                if(i != 0) {
-//                    for(SupplierThread st : suppliers) {
-//                        st.setPermits(true, false);
-//                    }
-//                }
-                                
-                // Start Thread
-                /*
-                if(i == 0) {
-                    for(SupplierThread st : suppliers) {
-                        st.start();
-                        st.setPermits(true, false);
-                    }
-                } else {
-                    for(SupplierThread st : suppliers) {
-                        st.setPermits(false, false);
-                    }
-                }
-               
-                try { reportBarrier.await(); } catch(Exception e) { }
-                for(SupplierThread st : suppliers) {
-                        st.setPermits(true, false);
                 }
             }
+            // --- Summary ---
+            System.out.print(" ".repeat(14));
+            System.out.printf("%s  >>  \n", Thread.currentThread().getName());
+            System.out.print(" ".repeat(14));
+            System.out.printf("%s  >>  ", Thread.currentThread().getName());
+            System.out.print("=".repeat(52));
+            System.out.printf("\n");
+            System.out.print(" ".repeat(14));
+            System.out.printf("%s  >>  Summary\n", Thread.currentThread().getName());
             
-            for(SupplierThread st : suppliers) {
-                st.setPermits(false, true);
-            }*/
-            
+            if (factories != null) {
+                Collections.sort(factories);
+                for (FactoryThread ft : factories) {
+                    int created = ft.getTotalCreated();
+                    int shipped = ft.getTotalShipped();
+                    float ratio = ((float)shipped/created)*100;
+                    System.out.print(" ".repeat(14));
+                    System.out.printf("%s  >>  %s    total products = %5d    shipped = %5d (%5.2f%%)\n"
+                            ,Thread.currentThread().getName(),ft.getName(),created,shipped,ratio);
+                }
+            }
         }
         
 	public void print()
@@ -376,28 +386,28 @@ public class Project2
 		System.out.println("=".repeat(20));
 
 		System.out.print(" ".repeat(14));
-		System.out.printf("%s  >>  Day of simulation : %d\n", Thread.currentThread().getName(), days);
+		System.out.printf("%s  >>  Days of simulation : %d\n", Thread.currentThread().getName(), days);
 
 		System.out.print(" ".repeat(14));
-		System.out.printf("%s  >>  Warehouse         : %s\n", Thread.currentThread().getName(), warehouse_num.show().toString());
+		System.out.printf("%s  >>  Warehouses         : %s\n", Thread.currentThread().getName(), warehouse_num.show().toString());
 
 		System.out.print(" ".repeat(14));
-		System.out.printf("%s  >>  Freights          : %s\n", Thread.currentThread().getName(), freight_num_max.show().toString());
+		System.out.printf("%s  >>  Freights           : %s\n", Thread.currentThread().getName(), freight_num_max.show().toString());
 
 		System.out.print(" ".repeat(14));
-		System.out.printf("%s  >>  Freights capacity : max = %d\n", Thread.currentThread().getName(), freight_num_max.getmax());
+		System.out.printf("%s  >>  Freight capacity   : max = %d\n", Thread.currentThread().getName(), freight_num_max.getmax());
 
 		System.out.print(" ".repeat(14));
-		System.out.printf("%s  >>  SupplierThreads   : %s\n", Thread.currentThread().getName(), supplier_num_min_max.showthread().toString());
+		System.out.printf("%s  >>  SupplierThreads    : %s\n", Thread.currentThread().getName(), supplier_num_min_max.showthread().toString());
 
 		System.out.print(" ".repeat(14));
-		System.out.printf("%s  >>  Daily supply      : min = %d, max = %d\n", Thread.currentThread().getName(), supplier_num_min_max.getmin(), supplier_num_min_max.getmax());
+		System.out.printf("%s  >>  Daily supply       : min = %d, max = %d\n", Thread.currentThread().getName(), supplier_num_min_max.getmin(), supplier_num_min_max.getmax());
 
 		System.out.print(" ".repeat(14));
-		System.out.printf("%s  >>  FactoryThreads    :%s\n", Thread.currentThread().getName(), factory_num_max.showthread().toString());
+		System.out.printf("%s  >>  FactoryThreads     :%s\n", Thread.currentThread().getName(), factory_num_max.showthread().toString());
 
 		System.out.print(" ".repeat(14));
-		System.out.printf("%s  >>  FactoryThreads    : max = %d\n", Thread.currentThread().getName(), factory_num_max.getmax());
+		System.out.printf("%s  >>  Daily production   : max = %d\n", Thread.currentThread().getName(), factory_num_max.getmax());
 
 	}
 	public void input(String filename)
